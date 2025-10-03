@@ -1,11 +1,12 @@
 const { exec } = require('child_process');
 const { JSDOM } = require('jsdom');
+const http = require('http');
 
 const extractPriceData = (data)=>{
  
       const dom = new JSDOM(data);
   const document = dom.window.document;
-    let rows = document.getElementsByClassName("cmc-table")[0].getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+    let rows = document.getElementsByClassName("cmc-table")[0]?.getElementsByTagName("tbody")[0]?.getElementsByTagName("tr");
      
     let out = [];
         [...rows].forEach((v,i)=>{
@@ -55,8 +56,8 @@ const extractRateData = (data)=>{
     const dom = new JSDOM(data);
   const document = dom.window.document;
   // console.log(document.body);
-    let out = document.getElementsByTagName('main')[0].getElementsByTagName("div")[19]; 
-  return out.innerHTML.match(/data-last-price="(.*?)"/)[1];
+    let out = document.getElementsByTagName('main')[0]?.getElementsByTagName("div")[19]; 
+  return out?.innerHTML.match(/data-last-price="(.*?)"/)[1];
 }
 
 const getRate = (from,to)=>{
@@ -88,10 +89,35 @@ exec(loads, { maxBuffer: 1024 * 1024 * 10 },(error, stdout, stderr) => {
 });
 }
 
-(async ()=>{
-    let a = await getRate('USD','NGN');
-    let b = await getPrice('bitcoin');
-    console.log(b[0].digitPrice);
-     console.log(a);
-    console.log(a * b[0].digitPrice);
-})();
+const server = http.createServer(async (req,res)=>{
+   // const [url,query]= req.url.toString().split("?");
+    //req.url = url;
+  //  if(req.url == );
+  let match = req.url.match(/convert\/([a-zA-Z]+)\/([a-zA-Z]+\/[0-9]+|[a-zA-Z]+)/);
+  if(!match){
+     res.end("");
+     return;
+  }
+  let coin = match[1];
+  let to = match[2].split("/")[0];
+  let value = (match[2].split("/")[1] != undefined)?match[2].split("/")[1]:1;
+ // console.log(coin);
+  let b = await getPrice(coin);
+   b = b.filter((v)=>v.coin.toLowerCase() == coin.toLowerCase());
+  let price = b[0].digitPrice;
+  
+  if(to.toUpperCase() !== "USD"){
+    price = price * await getRate('USD',to.toUpperCase());
+  }
+  res.setHeader('Content-Type','application/json');
+  let out = {
+     status:1,
+     data:{
+      value:parseInt(price) * parseInt(value),
+      change24h:null,
+      change7d:null
+     } 
+    }
+  res.end(JSON.stringify(out));
+});
+server.listen(3000);
